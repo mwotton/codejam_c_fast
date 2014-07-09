@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, BangPatterns #-}
+{-# LANGUAGE BangPatterns, ScopedTypeVariables #-}
 -- highest is pretty easy to get - we're always going to end up at the LCM of 1..n
 -- if you go in in order, then everyone's unhappy up to n
 -- but then all bets are off. damn.
@@ -7,23 +7,20 @@
 
 -- can't get to primes > n, because no-one would go there anyway.
 -- so: all products of the power set of primes < n, raised to an arbitrary power.
-import Data.Numbers.Primes
-import Data.List
-import Logs
-import Debug.Trace
-import Data.Array
-import Control.Parallel
-import Control.Parallel.Strategies
-import Data.Word
-import qualified Data.Vector.Unboxed as U
-import Data.Vector.Binary
-import Data.Binary
+import           Control.Parallel.Strategies
+import           Data.Binary
+import           Data.Vector.Binary ()
+import qualified Data.Vector.Unboxed         as U
+import           Logs
+import Control.Concurrent.Async
 
+{-# INLINE solve #-}
 solve :: U.Vector Word -> Word -> Word
 solve !smallprimes !no = diff small_arr
   where diff (!x) = {-# SCC "diff" #-} 1 + U.foldl' (\(!acc) (!x) -> acc + (diff_i x)) 0 x
         small_arr = {-# SCC "arr" #-} U.takeWhile (<= (ceiling . sqrt $ fromIntegral no))  smallprimes
-        diff_i (!x) = {-# SCC "diff_i" #-} (intlog no x ) - 1
+        {-# INLINE diff_i #-}
+        diff_i (!x) = (intlog no x ) - 1
 
 -- repa stuff
 -- small_array = fromFunction (Z :. len) (\(Z :. ix) -> arr ! (Z :. ix))
@@ -32,6 +29,8 @@ solve !smallprimes !no = diff small_arr
 main = do
   primes <- {-# SCC "decode" #-} decodeFile "primes.dat" :: IO (U.Vector Word)
   l <- getContents
-  putStr . unlines .  format . parMap rseq (solve primes .read) .  tail $ lines l
+  putStr . unlines .  format . parMap rseq (solve primes . read) . tail $ lines l
+--  results <- mapConcurrently (return . solve primes . read) .  tail $ lines l
+--  putStr . unlines $ format results
 
 format n = map (\(num, s) -> "Case #" ++ show num  ++ ": " ++ show s  ) $ zip [1..] n
